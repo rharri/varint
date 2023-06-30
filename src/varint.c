@@ -4,7 +4,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-void encode(uint64_t);
+uint64_t encode(uint64_t);
+uint64_t decode(uint64_t);
 
 int main(int argc, char const *argv[])
 {
@@ -39,13 +40,13 @@ int main(int argc, char const *argv[])
     fread(buffer, size, 1, fp);
 
     // print hex interpretation of each byte
-    for (size_t i = 0; i<size; ++i) {
+    for (size_t i = 0; i < size; ++i) {
         printf("%zu: %hx ", i, buffer[i]);
     }
     printf("\n");
 
     // print decimal interpretation of each byte
-    for (size_t i = 0; i<size; ++i) {
+    for (size_t i = 0; i < size; ++i) {
         int hi = buffer[i] & 0xF0; // bit mask 1111 XXXX
         int lo = buffer[i] & 0x0F; // bit mask XXXX 1111
         printf("%zu: %d + %d = %d\n", i, hi, lo, hi+lo);
@@ -65,8 +66,8 @@ int main(int argc, char const *argv[])
     assert(size <= INT_MAX); // loss of precision was intentional
 
     // bytes are stored as big-endian, so start from last index
-    for (int i = (int)size-1; i>=0; --i) {
-        n += (uint64_t)buffer[i] << (pos++ * 8);
+    for (int i = (int) size - 1; i >= 0; --i) {
+        n += (uint64_t) buffer[i] << (pos++ * 8);
     }
 
     // §6.5.7 Bitwise shift operators:
@@ -98,15 +99,57 @@ int main(int argc, char const *argv[])
     
     */
 
-    encode(n);
+    uint64_t encoded = encode(n);
+    uint64_t decoded = decode(encoded);
+
+    // assert(encoded == 0x01);    // 1
+    // assert(encoded == 0x9601);  // 150
+    assert(encoded == 0xFF00);  // 18446744073709551615
 
     fclose(fp);
 
     return EXIT_SUCCESS;
 }
 
-void encode(uint64_t src)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-invalid-specifier"
+#pragma GCC diagnostic ignored "-Wformat-extra-args"
+uint64_t encode(uint64_t src)
 {
-    // print uint64_t interpretation of bytes
-    printf("%lu\n", src);
+    // this encoding can use anywhere from 1 to 10 bytes
+    unsigned char byte_seq[10];
+    size_t count = 0;
+
+    while (src > 0) {
+        // take the lower 7 bits
+        uint8_t byte = src & 0x7F;
+
+        // move to the next 7 bits
+        src >>= 7;
+
+        // do we have more to encode?
+        if (src > 0) {
+            byte |= 1 << 7; // set continuation bit as msb
+        }
+
+        byte_seq[count] = byte;
+        ++count;
+    }
+
+    uint64_t n = 0;
+    size_t pos = 0;
+
+    // concatenate the bytes
+    for (int i = (int) count - 1; i >= 0; --i) {
+        n += (uint64_t) byte_seq[i] << (pos++ * 8);
+    }
+
+    return n;
+}
+#pragma GCC diagnostic pop
+
+uint64_t decode(uint64_t src)
+{
+    printf("TODO\n");
+    return 0;
 }
