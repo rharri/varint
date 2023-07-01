@@ -4,8 +4,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-uint64_t encode(uint64_t);
-uint64_t decode(uint64_t);
+__uint128_t encode(uint64_t);
+uint64_t decode(__uint128_t);
 
 int main(int argc, char const *argv[])
 {
@@ -99,12 +99,27 @@ int main(int argc, char const *argv[])
     
     */
 
-    uint64_t encoded = encode(n);
+    __uint128_t encoded = encode(n);
     uint64_t decoded = decode(encoded);
 
     // assert(encoded == 0x01);    // 1
     // assert(encoded == 0x9601);  // 150
-    assert(encoded == 0xFF00);  // 18446744073709551615
+    // assert(encoded == ((__uint128_t) 1000000000000*1208925819614) 
+    //     + 629174705921);  // 18446744073709551615 (maxint)
+
+    // cannot use 0xFFFFFFFFFFFFFFFFFF01 literal
+    // https://stackoverflow.com/a/31461428 and
+    // https://discourse.llvm.org/t/is-there-any-status-regarding-128-bit-integer-support-in-clang/59889
+
+    // solution: build up the desired value from smaller components
+    // 0xFFFFFFFFFFFFFFFFFF01 == 1_208_925_819_614_629_174_705_921
+    // __uint128_t n = (__uint128_t) (1_000_000_000_000*HI)+LOW
+    // n = ((__uint128_t) 1000000000000*1208925819614) + 629174705921)
+
+    assert(n == decoded);
+
+    printf("encode: %lu\n", n);
+    printf("decoded: %lu\n", decoded);
 
     fclose(fp);
 
@@ -114,7 +129,7 @@ int main(int argc, char const *argv[])
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-invalid-specifier"
 #pragma GCC diagnostic ignored "-Wformat-extra-args"
-uint64_t encode(uint64_t src)
+__uint128_t encode(uint64_t src)
 {
     // this encoding can use anywhere from 1 to 10 bytes
     unsigned char byte_seq[10];
@@ -136,20 +151,43 @@ uint64_t encode(uint64_t src)
         ++count;
     }
 
-    uint64_t n = 0;
+    __uint128_t n = 0;
     size_t pos = 0;
 
     // concatenate the bytes
     for (int i = (int) count - 1; i >= 0; --i) {
-        n += (uint64_t) byte_seq[i] << (pos++ * 8);
+        n += (__uint128_t) byte_seq[i] << (pos++ * 8);
     }
 
     return n;
 }
 #pragma GCC diagnostic pop
 
-uint64_t decode(uint64_t src)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-invalid-specifier"
+#pragma GCC diagnostic ignored "-Wformat-extra-args"
+uint64_t decode(__uint128_t src)
 {
-    printf("TODO\n");
-    return 0;
+    unsigned char byte_seq[10];
+    size_t count = 0;
+
+    while (src > 0) {
+        uint8_t byte = src & 0x7F;
+
+        src >>= 8;
+
+        byte_seq[count] = byte;
+        ++count;
+    }
+
+    uint64_t n = 0;
+    size_t pos = 0;
+
+    // concatenate the bytes
+    for (int i = (int) count - 1; i >= 0; --i) {
+        n += (uint64_t) byte_seq[i] << (pos++ * 7);
+    }
+
+    return n;
 }
+#pragma GCC diagnostic pop
