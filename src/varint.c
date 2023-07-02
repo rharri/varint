@@ -25,7 +25,7 @@ int main(int argc, char const *argv[])
         return EXIT_FAILURE;
     }
 
-    size_t size = 8;
+    size_t size = CHAR_BIT;
     unsigned char buffer[size]; // 8 byte array
 
     /*
@@ -67,7 +67,7 @@ int main(int argc, char const *argv[])
 
     // bytes are stored as big-endian, so start from last index
     for (int i = (int) size - 1; i >= 0; --i) {
-        n += (uint64_t) buffer[i] << (pos++ * 8);
+        n += (uint64_t) buffer[i] << (pos++ * CHAR_BIT);
     }
 
     // §6.5.7 Bitwise shift operators:
@@ -154,9 +154,9 @@ __uint128_t encode(uint64_t src)
     __uint128_t n = 0;
     size_t pos = 0;
 
-    // concatenate the bytes
+    // sum the bytes in their correct place (concatenate)
     for (int i = (int) count - 1; i >= 0; --i) {
-        n += (__uint128_t) byte_seq[i] << (pos++ * 8);
+        n += (__uint128_t) byte_seq[i] << (pos++ * CHAR_BIT);
     }
 
     return n;
@@ -166,15 +166,17 @@ __uint128_t encode(uint64_t src)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-invalid-specifier"
 #pragma GCC diagnostic ignored "-Wformat-extra-args"
-uint64_t decode(__uint128_t src)
+uint64_t decode(__uint128_t varint)
 {
     unsigned char byte_seq[10];
     size_t count = 0;
 
-    while (src > 0) {
-        uint8_t byte = src & 0x7F;
+    while (varint > 0) {
+        // take the lower 7 bits
+        uint8_t byte = varint & 0x7F;
 
-        src >>= 8;
+        // move to the next 8 bits, ignore the msb
+        varint >>= CHAR_BIT;
 
         byte_seq[count] = byte;
         ++count;
@@ -183,7 +185,7 @@ uint64_t decode(__uint128_t src)
     uint64_t n = 0;
     size_t pos = 0;
 
-    // concatenate the bytes
+    // sum the bytes in their correct place (concatenate)
     for (int i = (int) count - 1; i >= 0; --i) {
         n += (uint64_t) byte_seq[i] << (pos++ * 7);
     }
